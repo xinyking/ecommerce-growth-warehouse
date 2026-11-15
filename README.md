@@ -1,38 +1,45 @@
-# 电商数据仓库实验｜PySpark · Spark SQL
+# 零售品类经营数仓｜PySpark · Parquet
 
-基于公开教程数据，复现销售明细关联商品历史版本时的行数膨胀，并比较 Spark 对同一 Join 的两种物理计划。另有一组可直接运行的电商会话漏斗合成测试。
+场景假设：一家自行车零售商在月度经营复盘时，需要知道销售变化由哪些品类驱动。订单行、商品版本和品类字典来自不同系统。项目把这些数据合成可对账的销售事实，并产出月度品类经营表，方便定位下钻方向。
 
-## 已验证
+**经营结论**：2013 年 12 月样本销售额环比增长 5.25%，Bikes 贡献约 96.6% 的净增额。[复盘报告与质量校验](ANALYSIS.md)
 
-| 销售场景 | 明细行数 | 源金额合计 |
-|---|---:|---:|
-| 源销售明细 | 60,398 | 29,355,502.00 |
-| 关联全部商品历史版本 | 89,818 | 43,520,650.00 |
-| 关联唯一当前商品版本 | 60,398 | 29,355,502.00 |
-| 广播当前商品版本 | 60,398 | 29,355,502.00 |
+## 从源头到指标
 
-在 Windows 本地 Spark 4.0.2 上运行。排序合并对照方案的销售侧有 `Exchange hashpartitioning`，显式广播方案省去该处 Shuffle。商品版本筛选仍需一次维表侧的重分区。实验包含物理计划对照和结果对账，集群性能待测。
+```text
+CRM 销售明细 + CRM 商品历史 + ERP 品类字典
+  → Bronze：保留源文本字段
+  → Silver：解析日期与数量、计算有效金额、分离拒绝记录
+  → Gold：当前商品维度 + 按销售月份分区的销售事实
+  → Mart：按月、按品类汇总金额、销量、订单数和环比
+```
+
+| 层 | 输出与校验 |
+|---|---|
+| Bronze | 三份 CSV 分别落盘，保留原始字段 |
+| Silver | 原始行数 = 有效行数 + 拒绝行数，拒绝记录保留原因 |
+| Gold | 一行对应一条有效源销售明细，商品键和品类字典键先查唯一性，关联前后行数和金额必须相同 |
+| Mart | 一行对应一个自然月和一个当前品类，月度销售金额和行数合计对齐事实表 |
+
+销售额优先用数量 × 单价绝对值计算，价格缺失时采用有效原值。日期、数量或最终金额不符合规则的记录进入拒绝表。品类使用最新商品版本映射，缺失归入 Unknown。品类订单数按订单号去重，同一订单可包含多个品类，跨品类汇总订单数需回到事实表去重。环比只取上一自然月同品类金额。
 
 ## 复现
 
-准备 Python 3.12、JDK 17 和 PowerShell，从仓库根目录运行。
+先下载上游项目的样例数据。仓库通过脚本读取 `01_datasets` 下的三份文件。[DataWithBaraa 数据来源](https://github.com/DataWithBaraa/sql-data-warehouse-project)
+
+使用 Python 3.12、JDK 17 和 PowerShell。在仓库根目录运行：
 
 ```powershell
 python -m venv .venv
 & ./.venv/Scripts/python.exe -m pip install -r requirements.txt
-& ./.venv/Scripts/python.exe scripts/check_fixture.py
-& ./scripts/run_spark_smoke.ps1 -JavaHome 'C:/path/to/jdk-17'
+$env:JAVA_HOME = 'C:/path/to/jdk-17'
+$env:SPARK_LOCAL_HOSTNAME = 'localhost'
+$env:PYSPARK_PYTHON = (Resolve-Path .venv/Scripts/python.exe).Path
+& ./.venv/Scripts/python.exe scripts/build_warehouse.py --source 'C:/path/to/01_datasets' --output warehouse
 ```
 
-两次验证都读取仓库中的合成事件。Spark 结果预期为 3 个会话进入浏览、1 个达到加购、1 个完成有序购买。单独计算的事件层共有 3 条去重购买事件，其中有效金额合计 50 USD。
+`warehouse/current.json` 指向最后一次通过对账的运行。该版本目录中包含 Parquet 表、`audit.json`、`report/category_monthly.csv` 和日期过滤的 Spark 执行计划。
 
-销售案例的数据来自 DataWithBaraa 教程。下载其源码后，将 [Spark 第一课](SPARK-01.md) 的 `--source` 指向包含 `sales_details.csv` 和 `prd_info.csv` 的 CRM 目录。案例复用了商品键转换思路，汇总使用源销售金额，完整 SQL Server Gold 对账留作后续验证。[教程与数据来源](https://github.com/DataWithBaraa/sql-data-warehouse-project)
+## 技术选择与适用范围
 
-## 文档与后续阶段
-
-- [第一课与实测结果](SPARK-01.md)
-- [执行手册](GUIDE.md)
-- [产品需求](PRD.md) 与 [实施规格](SPEC.md)
-- `ingest/` 保存待在 BigQuery 验证的 GA4 剖析与提取 SQL。
-
-GA4 离线分区流水线、Kafka / Flink 实时链路、用户画像及实验评估目前属于设计范围。
+PySpark 执行清洗、窗口和关联聚合，Parquet 按月组织事实以便观察分区裁剪。当前 Windows 本地版本由 PyArrow 将 Spark 结果写入 Parquet，再由 Spark 读回对账。写入阶段汇集到 driver，适用于这套公开样本；扩展到集群时应使用分布式 Parquet 写入。每次运行构建独立结果目录，检查通过后替换发布指针。

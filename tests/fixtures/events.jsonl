@@ -1,9 +1,0 @@
-{"event_id":"a1","user_id":"a","session_id":"1","event_time":"2020-11-10T23:58:00Z","event_name":"view_item","channel":"organic","device":"mobile"}
-{"event_id":"a2","user_id":"a","session_id":"1","event_time":"2020-11-10T23:59:00Z","event_name":"add_to_cart","channel":"organic","device":"mobile"}
-{"event_id":"a3","user_id":"a","session_id":"1","event_time":"2020-11-11T00:01:00Z","event_name":"purchase","amount_usd":"30.00","channel":"organic","device":"mobile"}
-{"event_id":"a3","user_id":"a","session_id":"1","event_time":"2020-11-11T00:01:00Z","event_name":"purchase","amount_usd":"30.00","channel":"organic","device":"mobile"}
-{"event_id":"b1","user_id":"b","session_id":"1","event_time":"2020-11-10T13:00:00Z","event_name":"view_item","channel":"organic","device":"mobile"}
-{"event_id":"b2","user_id":"b","session_id":"1","event_time":"2020-11-10T13:01:00Z","event_name":"purchase","amount_usd":"20.00","channel":"organic","device":"mobile"}
-{"event_id":"c1","user_id":"c","session_id":"1","event_time":"2020-11-10T14:00:00Z","event_name":"add_to_cart","channel":"organic","device":"mobile"}
-{"event_id":"c2","user_id":"c","session_id":"1","event_time":"2020-11-10T14:01:00Z","event_name":"view_item","channel":"organic","device":"mobile"}
-{"event_id":"d1","event_time":"2020-11-10T14:05:00Z","event_name":"purchase"}
