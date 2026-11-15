@@ -1,0 +1,7 @@
+.venv/
+.jdk*/
+.jdk*.zip
+.tools/
+__pycache__/
+data/
+warehouse/
